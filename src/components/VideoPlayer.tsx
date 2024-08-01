@@ -1,34 +1,30 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 
-// Interface for the props expected by the VideoPlayer component
 interface VideoPlayerProps {
-  localStream: MediaStream | null;  // Media stream for local video
-  remoteStream: MediaStream | null; // Media stream for remote video
+  localStream: MediaStream | null;
+  remoteStream: MediaStream | null;
 }
 
-// Functional component for displaying local and remote video streams
 const VideoPlayer: React.FC<VideoPlayerProps> = ({ localStream, remoteStream }) => {
-  const localVideoRef = useRef<HTMLVideoElement>(null);   // Reference for local video element
-  const remoteVideoRef = useRef<HTMLVideoElement>(null);  // Reference for remote video element
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement>(null);
 
-  // Effect to set the local video stream source
   useEffect(() => {
-    if (localStream && localVideoRef.current) {
+    if (localVideoRef.current && localStream) {
       localVideoRef.current.srcObject = localStream;
     }
   }, [localStream]);
 
-  // Effect to set the remote video stream source
   useEffect(() => {
-    if (remoteStream && remoteVideoRef.current) {
+    if (remoteVideoRef.current && remoteStream) {
       remoteVideoRef.current.srcObject = remoteStream;
     }
   }, [remoteStream]);
 
   return (
     <div>
-      <video ref={localVideoRef} autoPlay playsInline />   
-      <video ref={remoteVideoRef} autoPlay playsInline />  
+      <video ref={localVideoRef} autoPlay playsInline />
+      <video ref={remoteVideoRef} autoPlay playsInline />
     </div>
   );
 };

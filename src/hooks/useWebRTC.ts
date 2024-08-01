@@ -1,17 +1,39 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { io } from 'socket.io-client';
 
-// Custom hook to manage WebRTC functionality and state
 const useWebRTC = () => {
-  // State for storing local and remote media streams
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
-
-  // Refs for managing the peer connection and socket connection
+  const [incomingCall, setIncomingCall] = useState(false);
+  const [isCaller, setIsCaller] = useState(false); // New state to track caller status
   const peerConnection = useRef<RTCPeerConnection | null>(null);
   const socket = useRef(io('https://localhost:8080/')).current;
+  // const socket = useRef(io('https://192.168.1.156:8080')).current;
 
-  // Function to start the local media stream
+
+  useEffect(() => {
+    socket.on('newOfferAwaiting', async (offer) => {
+      setIncomingCall(true);
+      setIsCaller(false); // Mark as receiver when an offer is received
+    });
+
+    socket.on('answerResponse', async (answer) => {
+      if (peerConnection.current) {
+        await peerConnection.current.setRemoteDescription(new RTCSessionDescription(answer));
+      }
+    });
+
+    socket.on('receivedIceCandidateFromServer', async (candidate) => {
+      if (peerConnection.current) {
+        await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
+
   const startLocalStream = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -22,17 +44,17 @@ const useWebRTC = () => {
     }
   };
 
-  // Function to initiate a call
   const call = async () => {
-    const localStream = await startLocalStream();
-    if (!localStream) return;
+    setIsCaller(true); // Mark as caller
+    const stream = await startLocalStream();
+    if (!stream) return;
 
     peerConnection.current = new RTCPeerConnection({
       iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
     });
 
-    localStream.getTracks().forEach((track) => {
-      peerConnection.current?.addTrack(track, localStream);
+    stream.getTracks().forEach((track) => {
+      peerConnection.current?.addTrack(track, stream);
     });
 
     peerConnection.current.onicecandidate = (event) => {
@@ -45,22 +67,25 @@ const useWebRTC = () => {
       setRemoteStream(event.streams[0]);
     };
 
-    const offer = await peerConnection.current.createOffer();
-    await peerConnection.current.setLocalDescription(offer);
-    socket.emit('newOffer', offer);
+    try {
+      const offer = await peerConnection.current.createOffer();
+      await peerConnection.current.setLocalDescription(offer);
+      socket.emit('newOffer', offer);
+    } catch (error) {
+      console.error('Error creating offer.', error);
+    }
   };
 
-  // Function to answer an incoming call
-  const answerCall = async () => {
-    const localStream = await startLocalStream();
-    if (!localStream) return;
+  const answerOffer = async () => {
+    const stream = await startLocalStream();
+    if (!stream) return;
 
     peerConnection.current = new RTCPeerConnection({
       iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
     });
 
-    localStream.getTracks().forEach((track) => {
-      peerConnection.current?.addTrack(track, localStream);
+    stream.getTracks().forEach((track) => {
+      peerConnection.current?.addTrack(track, stream);
     });
 
     peerConnection.current.onicecandidate = (event) => {
@@ -73,20 +98,20 @@ const useWebRTC = () => {
       setRemoteStream(event.streams[0]);
     };
 
-    socket.on('newOffer', async (offer: RTCSessionDescriptionInit) => {
-      await peerConnection.current?.setRemoteDescription(new RTCSessionDescription(offer));
-      const answer = await peerConnection.current?.createAnswer();
-      await peerConnection.current?.setLocalDescription(answer);
+    try {
+      // Replace with actual logic to get and use the incoming offer
+      // Example: `const offer = getOfferFromSomewhere();`
+      // await peerConnection.current.setRemoteDescription(new RTCSessionDescription(offer));
+      const answer = await peerConnection.current.createAnswer();
+      await peerConnection.current.setLocalDescription(answer);
       socket.emit('newAnswer', answer);
-    });
-
-    socket.on('sendIceCandidate', async (candidate: RTCIceCandidate) => {
-      await peerConnection.current?.addIceCandidate(new RTCIceCandidate(candidate));
-    });
+      setIncomingCall(false);
+    } catch (error) {
+      console.error('Error answering call.', error);
+    }
   };
 
-  // Return local and remote streams along with call and answer functions
-  return { localStream, remoteStream, call, answerCall };
+  return { localStream, remoteStream, call, answerCall: answerOffer, incomingCall, isCaller };
 };
 
 export default useWebRTC;
