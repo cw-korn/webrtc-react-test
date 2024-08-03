@@ -1,3 +1,4 @@
+import cors from 'cors';
 import express from 'express';
 import https from 'https';
 import fs from 'fs';
@@ -5,6 +6,18 @@ import { Server } from 'socket.io';
 
 // Initialize the Express application
 const app = express();
+
+// CORS configuration
+const allowedOrigins = ['https://192.168.1.156:5173'];
+app.use(cors({
+  origin: allowedOrigins,
+  methods: ['GET', 'POST'],
+  credentials: true,
+}));
+
+app.get('/', (req, res) => {
+  res.send('Socket.IO server is running.');
+});
 
 // Read SSL certificate files for HTTPS server
 const key = fs.readFileSync('./certs/cert.key');
@@ -14,7 +27,13 @@ const cert = fs.readFileSync('./certs/cert.crt');
 const server = https.createServer({ key, cert }, app);
 
 // Initialize a Socket.io server instance on the HTTPS server
-const io = new Server(server);
+const io = new Server(server, {
+  cors: {
+    origin: allowedOrigins,
+    methods: ['GET', 'POST'],
+    credentials: true,
+  }
+});
 
 // Data structures to manage offers and connected sockets
 const offers = [];
